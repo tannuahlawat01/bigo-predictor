@@ -1,17 +1,12 @@
 """
 ast_extractor.py
-
 Extracts structural features from Python source code using the built-in
 `ast` module, for use as input to a time-complexity classifier.
-
 Core idea: we don't treat code as text. We parse it into a tree and look
 at structural patterns (loop nesting, recursion, etc.) that correlate
 with time complexity.
 """
-
 import ast
-
-
 class ComplexityFeatureExtractor(ast.NodeVisitor):
     """
     Walks a Python AST and collects features relevant to time complexity.
@@ -54,16 +49,43 @@ class ComplexityFeatureExtractor(ast.NodeVisitor):
         self.current_loop_depth += 1
         self.max_loop_depth = max(self.max_loop_depth, self.current_loop_depth)
 
-        # Check if the loop bound depends on input size
-        # e.g. range(len(arr)) or range(n) -> input-dependent
-        # e.g. range(10) -> constant
-        if isinstance(node, ast.For) and isinstance(node.iter, ast.Call):
-            if getattr(node.iter.func, "id", "") == "range":
-                for arg in node.iter.args:
-                    # a constant number means fixed bound; anything else
-                    # (a variable, a len() call, etc.) we treat as input-dependent
-                    if not isinstance(arg, ast.Constant):
-                        self.has_input_dependent_loop_bound = True
+        if isinstance(node, ast.For):
+            self._check_for_loop_bound(node)
+        # Note: While loops are not analyzed for bound type here - their
+        # termination condition can be arbitrarily complex (e.g. binary
+        # search halving a range), which is a known limitation documented
+        # in the README rather than guessed at here.
+
+    def _check_for_loop_bound(self, node):
+        """
+        Determine whether a `for` loop's bound depends on input size.
+
+        Two patterns are checked:
+          1. range(...) calls - e.g. range(len(arr)), range(n) -> input-dependent
+             vs. range(10) -> constant
+          2. Direct iteration over a collection - e.g. `for x in arr` - this
+             is ALWAYS input-dependent, since the loop runs once per element
+             of whatever `arr` is, and its length isn't known statically.
+        """
+        if isinstance(node.iter, ast.Call) and getattr(node.iter.func, "id", "") == "range":
+            for arg in node.iter.args:
+                # a constant number means fixed bound; anything else
+                # (a variable, a len() call, etc.) we treat as input-dependent
+                if not isinstance(arg, ast.Constant):
+                    self.has_input_dependent_loop_bound = True
+
+        elif isinstance(node.iter, (ast.Name, ast.Attribute, ast.Subscript)):
+            # `for x in arr`, `for x in self.data`, `for x in arr[1:]`
+            # all iterate over a collection whose size isn't known at
+            # parse time -> input-dependent.
+            self.has_input_dependent_loop_bound = True
+
+        elif isinstance(node.iter, ast.Call):
+            # Common collection-producing calls: enumerate(arr), zip(a, b),
+            # sorted(arr), reversed(arr), arr.items(), etc.
+            func_name = ComplexityFeatureExtractor._get_call_name(node.iter)
+            if func_name in ("enumerate", "zip", "sorted", "reversed", "items", "keys", "values"):
+                self.has_input_dependent_loop_bound = True
 
     def _exit_loop(self):
         self.current_loop_depth -= 1
