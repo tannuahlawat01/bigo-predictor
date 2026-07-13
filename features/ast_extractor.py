@@ -29,7 +29,7 @@ class ComplexityFeatureExtractor(ast.NodeVisitor):
         self.has_sort_call = False
         self.has_hash_structure = False
         self.has_input_dependent_loop_bound = False
-
+        self.has_halving_pattern = False
         self.recursive_call_counts = []  # calls-per-invocation, for branch factor
 
     # ---- Loops ----
@@ -41,9 +41,31 @@ class ComplexityFeatureExtractor(ast.NodeVisitor):
 
     def visit_While(self, node):
         self._enter_loop(node)
+        self._check_while_loop_bound(node)
         self.generic_visit(node)
         self._exit_loop()
 
+    def _check_while_loop_bound(self, node):
+        """
+        Heuristic for while-loop bound detection: only trust an explicit
+        len() call in the condition (e.g. `while i < len(arr)`), since
+        this is an unambiguous signal the loop scales with input size.
+
+        Earlier version also flagged any two-variable comparison (e.g.
+        `while lo < hi`) as input-dependent, but this fired too broadly
+        in practice (e.g. unrelated counter comparisons) and diluted the
+        feature's signal, measurably hurting model accuracy. Deliberately
+        narrowed to len()-only after that regression was caught via
+        testing. Two-pointer patterns without an explicit len() call
+        (e.g. `while lo < hi` alone) are a known remaining gap.
+        """
+        for subnode in ast.walk(node.test):
+            if isinstance(subnode, ast.Call):
+                func_name = self._get_call_name(subnode)
+                if func_name == "len":
+                    self.has_input_dependent_loop_bound = True
+                    return
+                    
     def _enter_loop(self, node):
         self.num_loops += 1
         self.current_loop_depth += 1
@@ -116,6 +138,32 @@ class ComplexityFeatureExtractor(ast.NodeVisitor):
 
         self.generic_visit(node)
 
+    def visit_Assign(self, node):
+        self._check_halving_pattern(node.targets[0] if node.targets else None, node.value)
+        self.generic_visit(node)
+
+    def visit_AugAssign(self, node):
+        # Catches `x //= 2` directly
+        if isinstance(node.op, ast.FloorDiv) and self._is_constant_two(node.value):
+            self.has_halving_pattern = True
+        self.generic_visit(node)
+
+    def _check_halving_pattern(self, target, value):
+        """
+        Detects patterns like:
+            mid = (lo + hi) // 2
+            x = x // 2
+        which are strong signals of binary-search-style O(log n) behavior.
+        """
+        if not isinstance(value, ast.BinOp) or not isinstance(value.op, ast.FloorDiv):
+            return
+        if self._is_constant_two(value.right):
+            self.has_halving_pattern = True
+
+    @staticmethod
+    def _is_constant_two(node):
+        return isinstance(node, ast.Constant) and node.value == 2
+
     def visit_Dict(self, node):
         self.has_hash_structure = True
         self.generic_visit(node)
@@ -177,6 +225,7 @@ class ComplexityFeatureExtractor(ast.NodeVisitor):
             "has_sort_call": self.has_sort_call,
             "has_hash_structure": self.has_hash_structure,
             "has_input_dependent_loop_bound": self.has_input_dependent_loop_bound,
+            "has_halving_pattern": self.has_halving_pattern,
         }
 
 
