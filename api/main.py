@@ -2,11 +2,6 @@
 main.py
 
 FastAPI endpoint exposing the time complexity predictor over HTTP.
-Mirrors the production patterns from the Node/Express project:
-  - Input validation (Pydantic, equivalent to express-validator)
-  - Structured, consistent response shape (like ApiResponse/ApiError)
-  - Centralized error handling
-  - CORS configured for the Streamlit frontend
 """
 
 import sys
@@ -14,9 +9,22 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).parent.parent))
+
+# Ensure a trained model exists before importing predict.py (which loads
+# the model lazily on first request). On first deploy, or any environment
+# without a pre-trained model committed, train one from the committed
+# feature_matrix.csv rather than failing at request time.
+MODEL_PATH = Path(__file__).parent.parent / "model" / "complexity_model.pkl"
+if not MODEL_PATH.exists():
+    print("No trained model found — training one now (first-time setup)...")
+    from model.train import main as train_model
+    train_model()
+    print("Model training complete.")
+
 from model.predict import predict_complexity
 
 app = FastAPI(
@@ -25,17 +33,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS: allow the Streamlit frontend (running on a different port) to call this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501"],  # default Streamlit port
+    allow_origins=[
+        "http://localhost:8501",
+        "https://*.streamlit.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# ---- Request/response schemas (equivalent to input validation middleware) ----
 
 class CodeInput(BaseModel):
     code: str = Field(
@@ -56,8 +64,6 @@ class PredictionResponse(BaseModel):
     error: str | None = None
 
 
-# ---- Routes ----
-
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -68,8 +74,6 @@ async def predict(payload: CodeInput):
     result = predict_complexity(payload.code)
 
     if result["error"]:
-        # Code failed to parse — this is a client error (bad input),
-        # not a server error, so 400 not 500
         raise HTTPException(status_code=400, detail=result["error"])
 
     return {
@@ -83,14 +87,12 @@ async def predict(payload: CodeInput):
     }
 
 
-# ---- Centralized error handling for anything unexpected ----
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    return {
-        "success": False,
-        "error": "Internal server error",
-    }
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "error": "Internal server error"},
+    )
 
 
 if __name__ == "__main__":
