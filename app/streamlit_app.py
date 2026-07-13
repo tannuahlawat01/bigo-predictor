@@ -7,7 +7,7 @@ import requests
 import streamlit as st
 from streamlit_ace import st_ace
 
-API_URL = "https://bigo-predictor.onrender.com/health"
+API_URL = "https://bigo-predictor.onrender.com/predict"
 
 st.set_page_config(
     page_title="Big-O Complexity Predictor",
