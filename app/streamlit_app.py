@@ -272,7 +272,7 @@ if uploaded_file is not None:
     default_code = uploaded_file.read().decode("utf-8")
 
 # ---------- Code Editor ----------
-
+editor_key = f"ace_editor_{sample}_{uploaded_file.name if uploaded_file else 'default'}"
 editor_col, info_col = st.columns([3,1], gap="large")
 
 with editor_col:
@@ -283,7 +283,7 @@ with editor_col:
         value=default_code,
         language="python",
         theme="monokai",
-        key="ace_editor",
+        key=editor_key,
         height=420,
         font_size=15,
         tab_size=4,
