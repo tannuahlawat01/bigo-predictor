@@ -52,6 +52,7 @@ class PredictionResponse(BaseModel):
     confidence: float | None = None
     all_probabilities: dict | None = None
     features: dict | None = None
+    explanation: str | None = None
     error: str | None = None
 
 
@@ -77,6 +78,7 @@ async def predict(payload: CodeInput):
         "confidence": result["confidence"],
         "all_probabilities": result["all_probabilities"],
         "features": result["features"],
+        "explanation": result["explanation"],
         "error": None,
     }
 

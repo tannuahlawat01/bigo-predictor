@@ -27,6 +27,56 @@ FEATURE_COLUMNS = [
     "has_input_dependent_loop_bound",
 ]
 
+def generate_explanation(features: dict, complexity: str) -> str:
+    """
+    Produces a short, human-readable reason for the prediction based on
+    which extracted features are most relevant to the predicted class.
+    Rule-based, not learned — this mirrors the model's own feature
+    importances (loop depth and count matter most, then sort/recursion).
+    """
+    reasons = []
+
+    depth = features["max_loop_depth"]
+    num_loops = features["num_loops"]
+    has_recursion = features["has_recursion"]
+    branch_factor = features["recursion_branch_factor"]
+    has_sort = features["has_sort_call"]
+    has_hash = features["has_hash_structure"]
+    input_dependent = features["has_input_dependent_loop_bound"]
+
+    if has_recursion and branch_factor >= 2:
+        reasons.append(f"recursive calls with a branching factor of {branch_factor} per invocation")
+    elif has_recursion:
+        reasons.append("a single recursive call chain")
+
+    if depth >= 2:
+        reasons.append(f"{depth} levels of nested loops")
+    elif depth == 1 and input_dependent:
+        reasons.append("a single loop scaling with input size")
+    elif depth == 1:
+        reasons.append("a single loop with a fixed bound")
+
+    if has_sort:
+        reasons.append("a sort operation")
+
+    if has_hash and depth <= 1:
+        reasons.append("hash-based lookups (dict/set), which can keep operations closer to linear")
+
+    if not reasons:
+        reasons.append("no loops or recursion detected")
+
+    reason_text = ", ".join(reasons)
+
+    # A note for the model's known weak spot, so the explanation stays honest
+    caveat = ""
+    if complexity in ("O(2^n)", "O(n^2)"):
+        caveat = (
+            " Note: O(2ⁿ) and O(n²) can look structurally similar to this model "
+            "(both often involve nested loop-like patterns), so this is worth a manual check."
+        )
+
+    return f"Predicted {complexity} primarily due to: {reason_text}.{caveat}"
+
 # Load once at import time, not on every prediction call (avoids reloading
 # the model from disk on every single request — matters once this is
 # wrapped in an API that might get many requests)
@@ -75,11 +125,13 @@ def predict_complexity(code: str) -> dict:
         for i, p in enumerate(probabilities)
     }
 
+    explanation = generate_explanation(features, predicted_class)
     return {
         "complexity": predicted_class,
         "confidence": round(float(probabilities[predicted_idx]), 3),
         "all_probabilities": all_probs,
         "features": features,
+        "explanation": explanation,
         "error": None,
     }
 

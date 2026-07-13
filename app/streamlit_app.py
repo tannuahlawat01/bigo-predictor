@@ -7,7 +7,7 @@ import requests
 import streamlit as st
 from streamlit_ace import st_ace
 
-API_URL = "http://localhost:8000/predict"
+API_URL = "https://bigo-predictor.onrender.com/health"
 
 st.set_page_config(
     page_title="Big-O Complexity Predictor",
@@ -457,40 +457,28 @@ if predict_clicked:
             </p>
         </div>
         """, unsafe_allow_html=True)
-
         st.write("")
-
         st.progress(confidence)
-
         st.write(f"**Confidence:** {confidence*100:.2f}%")
-
+        st.write("")
+        st.markdown(f"💡 **Why this prediction:** {result['explanation']}")
         if confidence >= 0.80:
             st.success("Very High Confidence")
-
         elif confidence >= 0.60:
             st.info("High Confidence")
-
         elif confidence >= 0.40:
             st.warning("Moderate Confidence")
-
         else:
             st.error("Low Confidence")
-
     with right:
-
         st.metric("Prediction", complexity)
         st.metric("Confidence", f"{confidence*100:.1f}%")
         st.metric("Model", "Random Forest")
         st.metric("Classes", "6")
-
     st.write("")
-
     tab1, tab2 = st.tabs(["📊 Probabilities", "🌳 AST Features"])
-
     with tab1:
-
         st.write("### Class Probabilities")
-
         ordered_probs = dict(
             sorted(
                 probabilities.items(),
@@ -498,66 +486,45 @@ if predict_clicked:
                 reverse=True
             )
         )
-
         st.bar_chart(ordered_probs)
-
         st.write("")
-
         for label, prob in ordered_probs.items():
-
             st.write(f"**{label}**")
-
             st.progress(prob)
-
             st.caption(f"{prob*100:.2f}%")
-
     with tab2:
-
         st.write("### Extracted AST Features")
-
         c1, c2 = st.columns(2)
-
         with c1:
             st.metric(
                 "Maximum Loop Depth",
                 features["max_loop_depth"]
             )
-
             st.metric(
                 "Total Loops",
                 features["num_loops"]
             )
-
         with c2:
             st.metric(
                 "Recursion",
                 "Yes" if features["has_recursion"] else "No"
             )
-
             st.metric(
                 "Branch Factor",
                 features["recursion_branch_factor"]
             )
-
         st.write("")
-
         with st.expander("Raw Feature Vector"):
-
             st.json(features)
-
     st.success("Prediction completed successfully.")
 # ---------- Project Information ----------
-
 st.divider()
-
 st.header("📖 About the Project")
-
 tab1, tab2, tab3 = st.tabs([
     "Overview",
     "Model",
     "Limitations"
 ])
-
 with tab1:
 
     st.markdown("""
