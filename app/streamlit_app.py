@@ -128,7 +128,7 @@ with st.sidebar:
     st.write("• 4,844 Python programs")
     st.write("• 7 AST features")
     st.write("• 6 complexity classes")
-    st.write("• Accuracy: **59.2%**")
+    st.write("• Accuracy: **59.8%**")
 
     st.divider()
 
@@ -410,15 +410,11 @@ if predict_clicked:
         st.warning("Please enter some Python code.")
         st.stop()
 
-    with st.spinner("Analyzing code..."):
+    with st.spinner("Analyzing code... (first request may take up to a minute if the server was idle)"):
 
         try:
 
-            response = requests.post(
-                API_URL,
-                json={"code": code},
-                timeout=10
-            )
+            response = requests.post(API_URL, json={"code": code}, timeout=60)
 
             if response.status_code == 400:
                 st.error(response.json()["detail"])
