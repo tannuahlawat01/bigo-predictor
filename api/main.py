@@ -18,12 +18,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 # the model lazily on first request). On first deploy, or any environment
 # without a pre-trained model committed, train one from the committed
 # feature_matrix.csv rather than failing at request time.
-MODEL_PATH = Path(__file__).parent.parent / "model" / "complexity_model.pkl"
-if not MODEL_PATH.exists():
-    print("No trained model found — training one now (first-time setup)...")
-    from model.train import main as train_model
-    train_model()
-    print("Model training complete.")
 
 from model.predict import predict_complexity
 

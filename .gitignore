@@ -9,7 +9,6 @@ venv/
 *.egg-info/
 
 # Model artifacts (regenerate via model/train.py)
-model/*.pkl
 model/*.joblib
 
 # Environment
