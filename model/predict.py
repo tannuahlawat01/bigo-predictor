@@ -25,6 +25,7 @@ FEATURE_COLUMNS = [
     "has_sort_call",
     "has_hash_structure",
     "has_input_dependent_loop_bound",
+    "has_halving_pattern",
 ]
 
 def generate_explanation(features: dict, complexity: str) -> str:
